@@ -2,6 +2,7 @@ import csv
 from collections import deque
 import heapq
 import itertools
+import time
 
 class Vehicule:
     def __init__(self, id, x, y, orientation, length):
@@ -195,23 +196,40 @@ def BFS(s, successorsFn, isGoal):
 
     init_node = Node(s, None, None)
 
+    # Compteurs
+    generated = 0  # Nombre d’états générés
+    expanded = 0   # Nombre d’états développés
+    start_time = time.time()
+
     # Test si l'état initial est le but
     if isGoal(init_node.state):
+        elapsed = time.time() - start_time
+        print(f"⏱ Temps d'exécution BFS : {elapsed:.4f}s")
+        print(f"🧩 États générés : {generated}, développés : {expanded}")
         return init_node
 
     Open.append(init_node)
+    generated +=1
 
     # Boucle principale
     while len(Open) > 0:
         current = Open.popleft()  # Choisir le nœud le plus à gauche (FIFO)
+        expanded +=1
         Closed.add(current.state)  # Ajouter l'état à Closed (pas le nœud)
 
         # Pour chaque successeur
         for (action, successor) in successorsFn(current.state):
             child = Node(successor, current, action, current.g + 1)
+            generated +=1
 
             # Test si c'est le but
             if isGoal(child.state):
+                elapsed = time.time() - start_time
+                print("\n=== 📊 COMPLEXITÉ BFS ===")
+                print(f"⏱ Temps d'exécution : {elapsed:.4f} s")
+                print(f"🔹 États générés : {generated}")
+                print(f"🔹 États développés : {expanded}")
+                print(f"🔹 Taille finale de la file : {len(Open)}")
                 return child
 
             # Vérifier si l'état n'est pas déjà visité ou en attente
@@ -220,12 +238,16 @@ def BFS(s, successorsFn, isGoal):
                 Open.append(child)
 
     # Aucune solution trouvée
+    elapsed = time.time() - start_time
+    print("\n❌ Aucune solution trouvée.")
+    print(f"⏱ Temps d'exécution : {elapsed:.4f} s")
+    print(f"🔹 États générés : {generated}")
+    print(f"🔹 États développés : {expanded}")
     return None
 
-# -----------------------------------------------------------
-# 🌟 Heuristique h1 : distance horizontale jusqu’à la sortie
-# -----------------------------------------------------------
-# h1 : distance horizontale
+
+# Heuristique h1 : distance horizontale jusqu’à la sortie
+
 def h1(state):
     x = state.vehicles['X']['x']
     l = state.vehicles['X']['length']
@@ -249,22 +271,9 @@ def h2(state):
     # petite perturbation pour briser les égalités
     return base + blockers + 1e-6 * blockers
 
-# h3 : distance + 0.7 × nb bloqueurs (plus "agressive" mais encore admissible)
-def h3(state):
-    base = h1(state)
-    y = state.vehicles['X']['y']
-    x = state.vehicles['X']['x'] + state.vehicles['X']['length']
-    blockers = 0
-    while x < state.board_width:
-        cell = state.board[y][x]
-        if cell != ' ' and cell != 'X':
-            blockers += 1
-        x += 1
-    return base + 0.7 * blockers
-
 
 # -----------------------------------------------------------
-# 🧱 Heuristique h3 : h1 + 2 × (nb véhicules bloquants)
+# Heuristique h3 : h1 + 2 × (nb véhicules bloquants)
 # -----------------------------------------------------------
 def h3(state):
     base = h1(state)
@@ -280,49 +289,65 @@ def h3(state):
 
 
 # -----------------------------------------------------------
-# 🚀 Algorithme A* générique
+#  Algorithme A* générique
 # -----------------------------------------------------------
 def A_star(start_state, heuristic):
     import itertools, heapq
 
-    # File de priorité (min-heap)
+    # File de priorité (min-heap) des noeud a explorer 
     Open = []
-    # g_score mémorise le coût du meilleur chemin connu vers chaque état
-    g_score = {}
-    counter = itertools.count()  # sert à casser les égalités entre nœuds
+    g_score = {} # dictionnaire memorisant les valeurs de g(n) pour les etats deja explorés
+    counter = itertools.count()  # compteur pour eviter les égalités entre nœuds
+    generated = 0
+    expanded = 0
+    start_time = time.time()
 
-    # Nœud racine
+    # creation Nœud racine
     root = Node(start_state, None, None, g=0)
     root.setF(heuristic)
 
     start_key = str(root.state.vehicles)
-    g_score[start_key] = 0
+    g_score[start_key] = 0 # en python les dictionnaires ont besoin des clés non modifiables pour stocker les valeurs 
 
-    # 🔹 On ajoute le nœud racine à la file
+    # On ajoute le nœud racine à la file
     heapq.heappush(Open, (root.f, next(counter), root))
+    generated +=1
 
     while Open:
         # On récupère le nœud ayant le plus petit f
         _, _, current = heapq.heappop(Open)
+        expanded +=1
         current_key = str(current.state.vehicles)
 
-        # ✅ Vérification du but
+        # Vérification du but
         if current.state.isGoal():
+            elapsed = time.time() - start_time
+            print("\n=== 📊 COMPLEXITÉ A* ===")
+            print(f"⏱ Temps d'exécution : {elapsed:.4f} s")
+            print(f"🔹 États générés : {generated}")
+            print(f"🔹 États développés : {expanded}")
+            print(f"🔹 Taille finale de la file : {len(Open)}")
             return current
 
-        # 🔁 Génération des successeurs
+        # Génération des successeurs
         for (action, successor) in current.state.successorFunction():
             cost = 1  # coût uniforme
             child = Node(successor, current, action, current.g + cost)
             child.setF(heuristic)
             child_key = str(child.state.vehicles)
+            generated +=1
 
             old_g = g_score.get(child_key, float('inf'))
 
             # Si meilleur chemin trouvé → on met à jour
             if child.g < old_g:
                 g_score[child_key] = child.g
-                # ⚙️ Ajout du "tie-breaker" pour éviter les égalités de f
+                # ⚙Ajout du "tie-breaker" pour éviter les égalités de f
                 heapq.heappush(Open, (child.f + 1e-6 * child.g, next(counter), child))
 
+    elapsed = time.time() - start_time
+    print("\n❌ Aucune solution trouvée.")
+    print(f"⏱ Temps d'exécution : {elapsed:.4f} s")
+    print(f"🔹 États générés : {generated}")
+    print(f"🔹 États développés : {expanded}")
     return None

@@ -11,21 +11,21 @@ CORS(app)  # Permet à React de communiquer avec l'API
 
 @app.route('/api/health', methods=['GET'])
 def health_check():
-    """Vérifie que l'API fonctionne"""
+    #Vérifie que l'API fonctionne
     return jsonify({'status': 'ok', 'message': 'API Rush Hour is running'})
 
 
 @app.route('/api/parse-csv', methods=['POST'])
 def parse_csv():
-    """Parse un fichier CSV et retourne les données du puzzle"""
+    #Parse un fichier CSV et retourne les données du puzzle
     try:
         data = request.json
-        csv_content = data.get('csv')
+        csv_content = data.get('csv') #recuperer csv 
         
         if not csv_content:
             return jsonify({'error': 'Aucun contenu CSV fourni'}), 400
         
-        # Sauvegarder temporairement le CSV
+        # Sauvegarder temporairement le CSV dans un fichier 
         with tempfile.NamedTemporaryFile(mode='w', suffix='.csv', delete=False, encoding='utf-8') as f:
             f.write(csv_content)
             csv_path = f.name
@@ -47,7 +47,7 @@ def parse_csv():
                 }
             })
         finally:
-            os.unlink(csv_path)
+            os.unlink(csv_path) #supprimer le fichier temporaire
     
     except Exception as e:
         return jsonify({
@@ -65,7 +65,7 @@ def solve_puzzle():
         algorithm = data.get('algorithm', 'bfs')
         
         if not csv_content:
-            return jsonify({'error': 'Aucun contenu CSV fourni'}), 400
+            return jsonify({'error': 'Aucun contenu CSV fourni'}), 400 
         
         print(f"🔍 Résolution avec {algorithm}...")
         
