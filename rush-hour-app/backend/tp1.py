@@ -291,36 +291,26 @@ def h3(state):
 # -----------------------------------------------------------
 #  Algorithme A* générique
 # -----------------------------------------------------------
-def A_star(start_state, heuristic):
-    import itertools, heapq
 
-    # File de priorité (min-heap) des noeud a explorer 
+
+def AStar(s, successorsFn, isGoal, h):
+    """Implémentation de l'algorithme A*"""
     Open = []
-    g_score = {} # dictionnaire memorisant les valeurs de g(n) pour les etats deja explorés
-    counter = itertools.count()  # compteur pour eviter les égalités entre nœuds
-    generated = 0
+    Closed = []
+
+    init_node = Node(s, None, None, g=0)
+    init_node.f = init_node.g + h(init_node.state)
+    heapq.heappush(Open, (init_node.f, init_node))
+
+    generated = 1
     expanded = 0
     start_time = time.time()
 
-    # creation Nœud racine
-    root = Node(start_state, None, None, g=0)
-    root.setF(heuristic)
-
-    start_key = str(root.state.vehicles)
-    g_score[start_key] = 0 # en python les dictionnaires ont besoin des clés non modifiables pour stocker les valeurs 
-
-    # On ajoute le nœud racine à la file
-    heapq.heappush(Open, (root.f, next(counter), root))
-    generated +=1
-
     while Open:
-        # On récupère le nœud ayant le plus petit f
-        _, _, current = heapq.heappop(Open)
-        expanded +=1
-        current_key = str(current.state.vehicles)
+        _, current = heapq.heappop(Open)
+        expanded += 1
 
-        # Vérification du but
-        if current.state.isGoal():
+        if isGoal(current.state):
             elapsed = time.time() - start_time
             print("\n=== 📊 COMPLEXITÉ A* ===")
             print(f"⏱ Temps d'exécution : {elapsed:.4f} s")
@@ -329,25 +319,32 @@ def A_star(start_state, heuristic):
             print(f"🔹 Taille finale de la file : {len(Open)}")
             return current
 
-        # Génération des successeurs
-        for (action, successor) in current.state.successorFunction():
-            cost = 1  # coût uniforme
-            child = Node(successor, current, action, current.g + cost)
-            child.setF(heuristic)
-            child_key = str(child.state.vehicles)
-            generated +=1
+        Closed.append(current)
 
-            old_g = g_score.get(child_key, float('inf'))
+        for (action, successor) in successorsFn(current.state):
+            child = Node(successor, current, action, current.g + 1)
+            child.f = child.g + h(child.state)
 
-            # Si meilleur chemin trouvé → on met à jour
-            if child.g < old_g:
-                g_score[child_key] = child.g
-                # ⚙Ajout du "tie-breaker" pour éviter les égalités de f
-                heapq.heappush(Open, (child.f + 1e-6 * child.g, next(counter), child))
+            # Vérifier doublons
+            in_open = next((n for (_, n) in Open if n.state == child.state), None)
+            in_closed = next((n for n in Closed if n.state == child.state), None)
+
+            if not in_open and not in_closed:
+                heapq.heappush(Open, (child.f, child))
+                generated += 1
+            elif in_open and child.f < in_open.f:
+                Open.remove((in_open.f, in_open))
+                heapq.heapify(Open)
+                heapq.heappush(Open, (child.f, child))
+            elif in_closed and child.f < in_closed.f:
+                Closed.remove(in_closed)
+                heapq.heappush(Open, (child.f, child))
+                generated += 1
 
     elapsed = time.time() - start_time
-    print("\n❌ Aucune solution trouvée.")
+    print("\n❌ Aucune solution trouvée par A*.")
     print(f"⏱ Temps d'exécution : {elapsed:.4f} s")
     print(f"🔹 États générés : {generated}")
     print(f"🔹 États développés : {expanded}")
     return None
+

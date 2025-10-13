@@ -1,6 +1,6 @@
 from flask import Flask, request, jsonify
 from flask_cors import CORS
-from tp1 import RushHourPuzzle, BFS, A_star, h1, h2, h3
+from tp1 import RushHourPuzzle, BFS, AStar, h1, h2, h3
 import tempfile
 import os
 import traceback
@@ -95,13 +95,28 @@ def solve_puzzle():
                 )
             elif algorithm == 'astar_h1':
                 print("⏳ Lancement de A* (h1)...")
-                goal_node = A_star(puzzle, h1)
+                goal_node = AStar(
+                    s=puzzle,
+                    successorsFn=lambda state: state.successorFunction(),
+                    isGoal=lambda state: state.isGoal(),
+                    h=h1
+                )
             elif algorithm == 'astar_h2':
                 print("⏳ Lancement de A* (h2)...")
-                goal_node = A_star(puzzle, h2)
+                goal_node = AStar(
+                    s=puzzle,
+                    successorsFn=lambda state: state.successorFunction(),
+                    isGoal=lambda state: state.isGoal(),
+                    h=h2
+                )
             elif algorithm == 'astar_h3':
                 print("⏳ Lancement de A* (h3)...")
-                goal_node = A_star(puzzle, h3)
+                goal_node = AStar(
+                    s=puzzle,
+                    successorsFn=lambda state: state.successorFunction(),
+                    isGoal=lambda state: state.isGoal(),
+                    h=h3
+                )
             else:
                 return jsonify({'error': f'Algorithme inconnu: {algorithm}'}), 400
             
