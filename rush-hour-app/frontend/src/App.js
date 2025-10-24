@@ -240,7 +240,7 @@ const RushHourGame = () => {
     return true;
   }, [puzzle]);
 
-  // Déplacer un véhicule
+  // CORRECTION : Déplacer un véhicule avec comptage simplifié
   const moveVehicle = useCallback((vehicleId, newX, newY) => {
     if (!isValidMove(vehicleId, newX, newY)) return false;
 
@@ -249,14 +249,12 @@ const RushHourGame = () => {
       const vehicle = newPuzzle.vehicles[vehicleId];
 
       if (vehicle) {
-        // Vérifier si la position a changé
+        // Vérifier si la position a réellement changé
         const hasMoved = vehicle.x !== newX || vehicle.y !== newY;
         
-        vehicle.x = newX;
-        vehicle.y = newY;
-
         if (hasMoved) {
-          setMoveCount(prevCount => prevCount + 1);
+          vehicle.x = newX;
+          vehicle.y = newY;
         }
       }
 
@@ -277,7 +275,7 @@ const RushHourGame = () => {
     setVehicleStartPos({ x: vehicle.x, y: vehicle.y });
   }, [puzzle]);
 
-  // Gestionnaire de glissement
+  // CORRECTION : Gestionnaire de glissement
   const handleDrag = useCallback((clientX, clientY) => {
     if (!draggingVehicle || !puzzle) return;
 
@@ -309,15 +307,25 @@ const RushHourGame = () => {
     moveVehicle(draggingVehicle, newX, newY);
   }, [draggingVehicle, puzzle, dragStartPos, vehicleStartPos, moveVehicle]);
 
-  // Gestionnaire de fin de glissement
+  // CORRECTION : Gestionnaire de fin de glissement avec comptage
   const handleDragEnd = useCallback(() => {
-    setDraggingVehicle(null);
-    
-    // Vérifier si le puzzle est résolu après le mouvement
-    if (isGoal()) {
-      showMessage(`🎉 Puzzle résolu en ${moveCount} mouvements!`, 'success');
+    if (draggingVehicle && puzzle) {
+      const vehicle = puzzle.vehicles[draggingVehicle];
+      
+      // Vérifier si la position a changé depuis le début du drag
+      if (vehicle && (vehicle.x !== vehicleStartPos.x || vehicle.y !== vehicleStartPos.y)) {
+        // Incrémenter le compteur de mouvements
+        setMoveCount(prev => prev + 1);
+        
+        // Vérifier si le puzzle est résolu
+        if (isGoal()) {
+          showMessage(`🎉 Puzzle résolu en ${moveCount + 1} mouvements!`, 'success');
+        }
+      }
     }
-  }, [isGoal, moveCount, showMessage]);
+    
+    setDraggingVehicle(null);
+  }, [draggingVehicle, puzzle, vehicleStartPos, isGoal, moveCount, showMessage]);
 
   // Gestionnaires d'événements de souris
   const handleMouseDown = useCallback((vehicleId, e) => {
