@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { Play, Pause, RotateCcw, Upload, Zap, AlertCircle, CheckCircle, Car } from 'lucide-react';
+import { Play, Pause, RotateCcw, Upload, Zap, AlertCircle, CheckCircle, Car, Truck } from 'lucide-react';
 import './App.css';
 
 const API_URL = 'http://localhost:5000/api';
@@ -15,6 +15,9 @@ const RushHourGame = () => {
   const [solving, setSolving] = useState(false);
   const [apiConnected, setApiConnected] = useState(false);
   const [selectedAlgorithm, setSelectedAlgorithm] = useState('bfs');
+  const [draggingVehicle, setDraggingVehicle] = useState(null);
+  const [dragStartPos, setDragStartPos] = useState({ x: 0, y: 0 });
+  const [vehicleStartPos, setVehicleStartPos] = useState({ x: 0, y: 0 });
 
   // Afficher un message
   const showMessage = useCallback((text, type = 'info') => {
@@ -190,7 +193,188 @@ const RushHourGame = () => {
     return board;
   };
 
-  // Appliquer le prochain mouvement
+  // Vérifier si un mouvement est valide
+  const isValidMove = useCallback((vehicleId, newX, newY) => {
+    if (!puzzle) return false;
+
+    const vehicle = puzzle.vehicles[vehicleId];
+    if (!vehicle) return false;
+
+    const board = createBoard();
+    const { orientation, length } = vehicle;
+
+    // Vérifier les limites du plateau
+    if (orientation === 'H') {
+      if (newX < 0 || newX + length > puzzle.width || newY < 0 || newY >= puzzle.height) {
+        return false;
+      }
+    } else {
+      if (newY < 0 || newY + length > puzzle.height || newX < 0 || newX >= puzzle.width) {
+        return false;
+      }
+    }
+
+    // Vérifier les collisions avec d'autres véhicules et murs
+    for (let i = 0; i < length; i++) {
+      let checkX, checkY;
+
+      if (orientation === 'H') {
+        checkX = newX + i;
+        checkY = newY;
+      } else {
+        checkX = newX;
+        checkY = newY + i;
+      }
+
+      // Vérifier si la cellule est occupée par un autre véhicule (sauf celui qu'on déplace)
+      if (board[checkY][checkX] !== ' ' && board[checkY][checkX] !== '#' && board[checkY][checkX] !== vehicleId) {
+        return false;
+      }
+
+      // Vérifier les murs
+      if (board[checkY][checkX] === '#') {
+        return false;
+      }
+    }
+
+    return true;
+  }, [puzzle]);
+
+  // Déplacer un véhicule
+  const moveVehicle = useCallback((vehicleId, newX, newY) => {
+    if (!isValidMove(vehicleId, newX, newY)) return false;
+
+    setPuzzle(prev => {
+      const newPuzzle = JSON.parse(JSON.stringify(prev));
+      const vehicle = newPuzzle.vehicles[vehicleId];
+
+      if (vehicle) {
+        // Vérifier si la position a changé
+        const hasMoved = vehicle.x !== newX || vehicle.y !== newY;
+        
+        vehicle.x = newX;
+        vehicle.y = newY;
+
+        if (hasMoved) {
+          setMoveCount(prevCount => prevCount + 1);
+        }
+      }
+
+      return newPuzzle;
+    });
+
+    return true;
+  }, [isValidMove]);
+
+  // Gestionnaire de début de glissement
+  const handleDragStart = useCallback((vehicleId, clientX, clientY) => {
+    if (!puzzle || !puzzle.vehicles[vehicleId]) return;
+
+    setDraggingVehicle(vehicleId);
+    setDragStartPos({ x: clientX, y: clientY });
+    
+    const vehicle = puzzle.vehicles[vehicleId];
+    setVehicleStartPos({ x: vehicle.x, y: vehicle.y });
+  }, [puzzle]);
+
+  // Gestionnaire de glissement
+  const handleDrag = useCallback((clientX, clientY) => {
+    if (!draggingVehicle || !puzzle) return;
+
+    const vehicle = puzzle.vehicles[draggingVehicle];
+    if (!vehicle) return;
+
+    const cellSize = Math.min(80, Math.floor(600 / Math.max(puzzle.width, puzzle.height)));
+    const deltaX = clientX - dragStartPos.x;
+    const deltaY = clientY - dragStartPos.y;
+
+    // Calculer le déplacement en cases
+    const cellDeltaX = Math.round(deltaX / cellSize);
+    const cellDeltaY = Math.round(deltaY / cellSize);
+
+    let newX = vehicleStartPos.x;
+    let newY = vehicleStartPos.y;
+
+    if (vehicle.orientation === 'H') {
+      // Déplacement horizontal seulement
+      newX = vehicleStartPos.x + cellDeltaX;
+      newY = vehicleStartPos.y;
+    } else {
+      // Déplacement vertical seulement
+      newX = vehicleStartPos.x;
+      newY = vehicleStartPos.y + cellDeltaY;
+    }
+
+    // Appliquer le mouvement si valide
+    moveVehicle(draggingVehicle, newX, newY);
+  }, [draggingVehicle, puzzle, dragStartPos, vehicleStartPos, moveVehicle]);
+
+  // Gestionnaire de fin de glissement
+  const handleDragEnd = useCallback(() => {
+    setDraggingVehicle(null);
+    
+    // Vérifier si le puzzle est résolu après le mouvement
+    if (isGoal()) {
+      showMessage(`🎉 Puzzle résolu en ${moveCount} mouvements!`, 'success');
+    }
+  }, [isGoal, moveCount, showMessage]);
+
+  // Gestionnaires d'événements de souris
+  const handleMouseDown = useCallback((vehicleId, e) => {
+    e.preventDefault();
+    handleDragStart(vehicleId, e.clientX, e.clientY);
+  }, [handleDragStart]);
+
+  const handleMouseMove = useCallback((e) => {
+    if (draggingVehicle) {
+      e.preventDefault();
+      handleDrag(e.clientX, e.clientY);
+    }
+  }, [draggingVehicle, handleDrag]);
+
+  const handleMouseUp = useCallback(() => {
+    if (draggingVehicle) {
+      handleDragEnd();
+    }
+  }, [draggingVehicle, handleDragEnd]);
+
+  // Gestionnaires d'événements tactiles
+  const handleTouchStart = useCallback((vehicleId, e) => {
+    const touch = e.touches[0];
+    handleDragStart(vehicleId, touch.clientX, touch.clientY);
+  }, [handleDragStart]);
+
+  const handleTouchMove = useCallback((e) => {
+    if (draggingVehicle) {
+      const touch = e.touches[0];
+      handleDrag(touch.clientX, touch.clientY);
+    }
+  }, [draggingVehicle, handleDrag]);
+
+  const handleTouchEnd = useCallback(() => {
+    if (draggingVehicle) {
+      handleDragEnd();
+    }
+  }, [draggingVehicle, handleDragEnd]);
+
+  // Appliquer les écouteurs d'événements globaux
+  useEffect(() => {
+    if (draggingVehicle) {
+      document.addEventListener('mousemove', handleMouseMove);
+      document.addEventListener('mouseup', handleMouseUp);
+      document.addEventListener('touchmove', handleTouchMove);
+      document.addEventListener('touchend', handleTouchEnd);
+
+      return () => {
+        document.removeEventListener('mousemove', handleMouseMove);
+        document.removeEventListener('mouseup', handleMouseUp);
+        document.removeEventListener('touchmove', handleTouchMove);
+        document.removeEventListener('touchend', handleTouchEnd);
+      };
+    }
+  }, [draggingVehicle, handleMouseMove, handleMouseUp, handleTouchMove, handleTouchEnd]);
+
+  // Appliquer le prochain mouvement de la solution
   const applyNextMove = useCallback(() => {
     if (!solution || solutionIndex >= solution.length) return;
 
@@ -275,8 +459,8 @@ const RushHourGame = () => {
           <div className="title-section">
             <Car className="header-icon" size={48} />
             <h1 className="game-title">Rush Hour Solver</h1>
+            <p className="game-subtitle">Déplacez la voiture rouge vers la sortie en évitant les obstacles</p>
           </div>
-          <p className="game-subtitle">Déplacez la voiture rouge vers la sortie en évitant les obstacles</p>
           
           {/* Status API */}
           <div className={`api-status ${apiConnected ? 'connected' : 'disconnected'}`}>
@@ -285,6 +469,13 @@ const RushHourGame = () => {
           </div>
         </div>
       </header>
+
+      {/* Message Toast */}
+      {message.text && (
+        <div className={`message-toast ${message.type}`}>
+          {message.text}
+        </div>
+      )}
 
       <div className="game-layout">
         {/* Section principale : Plateau + Contrôles */}
@@ -297,6 +488,7 @@ const RushHourGame = () => {
                 <div className="board-info">
                   <span>{puzzle.width}×{puzzle.height}</span>
                   <span>{Object.keys(puzzle.vehicles).length} véhicules</span>
+                  <span className="drag-hint">💡 Glissez-déposez les véhicules pour les déplacer</span>
                 </div>
               )}
             </div>
@@ -346,19 +538,33 @@ const RushHourGame = () => {
                       const width = orientation === 'H' ? length * cellSize : cellSize;
                       const height = orientation === 'V' ? length * cellSize : cellSize;
 
+                      // Déterminer l'icône en fonction de la longueur et de l'ID
+                      const renderIcon = () => {
+                        if (vid === 'X') {
+                          return <Car className="vehicle-icon red-icon" size={cellSize * 0.6} />;
+                        } else if (length === 2) {
+                          return <Car className="vehicle-icon" size={cellSize * 0.6} />;
+                        } else if (length === 3) {
+                          return <Truck className="vehicle-icon" size={cellSize * 0.6} />;
+                        }
+                        return <Car className="vehicle-icon" size={cellSize * 0.6} />;  // Fallback
+                      };
+
                       return (
                         <div
                           key={vid}
-                          className={getVehicleClass(vid)}
+                          className={`${getVehicleClass(vid)} ${draggingVehicle === vid ? 'dragging' : ''}`}
                           style={{
                             left: x * cellSize,
                             top: y * cellSize,
                             width,
                             height,
-                            fontSize: `${cellSize / 3}px`
+                            cursor: 'grab',
                           }}
+                          onMouseDown={(e) => handleMouseDown(vid, e)}
+                          onTouchStart={(e) => handleTouchStart(vid, e)}
                         >
-                          {vid}
+                          {renderIcon()}
                         </div>
                       );
                     })}
@@ -492,55 +698,11 @@ const RushHourGame = () => {
                 )}
               </div>
             )}
-
-            {/* Message Display */}
-            {message.text && (
-              <div className={`message-container message-${message.type}`}>
-                {message.text}
-              </div>
-            )}
-
-            {/* Solution Info */}
-            {solution && (
-              <div className="solution-info">
-                <h4>Solution Trouvée</h4>
-                <p>{solution.length} mouvements avec {getAlgorithmName(selectedAlgorithm)}</p>
-                <div className="next-move">
-                  <strong>Prochain mouvement :</strong>
-                  {solutionIndex < solution.length ? (
-                    <code>{JSON.stringify(solution[solutionIndex])}</code>
-                  ) : (
-                    <span>Solution terminée</span>
-                  )}
-                </div>
-              </div>
-            )}
           </div>
-        </div>
 
-        {/* Footer Stats */}
-        {puzzle && (
-          <div className="stats-footer">
-            <div className="stat-card">
-              <span className="stat-label">Dimensions</span>
-              <span className="stat-value">{puzzle.width} × {puzzle.height}</span>
-            </div>
-            <div className="stat-card">
-              <span className="stat-label">Véhicules</span>
-              <span className="stat-value">{Object.keys(puzzle.vehicles).length}</span>
-            </div>
-            <div className="stat-card">
-              <span className="stat-label">Murs</span>
-              <span className="stat-value">{puzzle.walls.length}</span>
-            </div>
-            <div className="stat-card">
-              <span className="stat-label">Mouvements</span>
-              <span className="stat-value highlight">{moveCount}</span>
-            </div>
-          </div>
-        )}
-      </div>
-    </div>
+        </div> {/* end main-content */}
+      </div> {/* end game-layout */}
+    </div> /* end rush-hour-container */
   );
 };
 

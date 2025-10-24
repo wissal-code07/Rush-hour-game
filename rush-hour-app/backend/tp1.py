@@ -246,46 +246,44 @@ def BFS(s, successorsFn, isGoal):
     return None
 
 
-# Heuristique h1 : distance horizontale jusqu’à la sortie
-
+# Heuristique h1 : distance horizontale jusqu’à la sortie (sans pénalité pour les bloqueurs)
 def h1(state):
     x = state.vehicles['X']['x']
     l = state.vehicles['X']['length']
-    y = state.vehicles['X']['y']
-    dist = state.board_width - (x + l)
-    blockers = sum(1 for xx in range(x + l, state.board_width) if state.board[y][xx] != ' ')
-    return dist + 0.001 * blockers
+    return state.board_width - (x + l)
 
 
-# h2 : distance + 0.5 × nb bloqueurs (plus douce)
+# h2 : h1 + nombre de véhicules bloqueurs uniques (plus douce, avec epsilon pour briser les égalités)
 def h2(state):
     base = h1(state)
     y = state.vehicles['X']['y']
-    x = state.vehicles['X']['x'] + state.vehicles['X']['length']
-    blockers = 0
-    while x < state.board_width:
-        cell = state.board[y][x]
+    x_start = state.vehicles['X']['x'] + state.vehicles['X']['length']
+    blockers = set()
+    for xx in range(x_start, state.board_width):
+        cell = state.board[y][xx]
         if cell != ' ' and cell != 'X':
-            blockers += 1
-        x += 1
-    # petite perturbation pour briser les égalités
-    return base + blockers + 1e-6 * blockers
+            blockers.add(cell)
+    return base + len(blockers) + 1e-6 * len(blockers)
 
 
-# -----------------------------------------------------------
-# Heuristique h3 : h1 + 2 × (nb véhicules bloquants)
-# -----------------------------------------------------------
+# h3 : h1 + somme des distances minimales pour que chaque véhicule bloqueur se dégage (plus efficace)
 def h3(state):
     base = h1(state)
     y = state.vehicles['X']['y']
-    x = state.vehicles['X']['x'] + state.vehicles['X']['length']
-    blockers = 0
-    while x < state.board_width:
-        cell = state.board[y][x]
-        if cell != ' ' and cell != 'X':
-            blockers += 1
-        x += 1
-    return base + 2 * blockers
+    x_start = state.vehicles['X']['x'] + state.vehicles['X']['length']
+    blockers = set()
+    total_penalty = 0
+    for xx in range(x_start, state.board_width):
+        cell = state.board[y][xx]
+        if cell != ' ' and cell != 'X' and cell not in blockers:
+            blockers.add(cell)
+            veh_data = state.vehicles[cell]
+            veh_length = veh_data['length']
+            veh_x = veh_data['x']
+            # Distance pour que ce véhicule se dégage complètement (vers la droite)
+            dist_to_clear = state.board_width - (veh_x + veh_length)
+            total_penalty += dist_to_clear
+    return base + total_penalty + 1e-6 * total_penalty
 
 
 # -----------------------------------------------------------
@@ -323,7 +321,7 @@ def AStar(s, successorsFn, isGoal, h):
 
         for (action, successor) in successorsFn(current.state):
             child = Node(successor, current, action, current.g + 1)
-            child.f = child.g + h(child.state)
+            child.f = child.g + h(child.state) # a modifier en appelant la fonction setf
 
             # Vérifier doublons
             in_open = next((n for (_, n) in Open if n.state == child.state), None)
@@ -347,4 +345,3 @@ def AStar(s, successorsFn, isGoal, h):
     print(f"🔹 États générés : {generated}")
     print(f"🔹 États développés : {expanded}")
     return None
-

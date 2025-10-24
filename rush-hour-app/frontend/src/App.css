@@ -605,3 +605,40 @@ body {
 .hidden {
   display: none;
 }
+
+/* Styles pour le glisser-déposer */
+.vehicle {
+  transition: transform 0.1s ease;
+  user-select: none;
+  touch-action: none;
+}
+
+.vehicle.dragging {
+  cursor: grabbing !important;
+  z-index: 1000;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+  transform: scale(1.05);
+  transition: none;
+}
+
+/* Indication pour le glisser-déposer */
+.drag-hint {
+  font-size: 0.8em;
+  color: #666;
+  margin-left: 10px;
+}
+
+/* Amélioration du feedback visuel pendant le drag */
+.game-board {
+  position: relative;
+}
+
+/* Styles pour les véhicules pendant l'interaction */
+.vehicle:hover:not(.dragging) {
+  cursor: grab;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.2);
+}
+
+.vehicle:active:not(.dragging) {
+  cursor: grabbing;
+}
